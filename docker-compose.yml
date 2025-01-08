@@ -1,0 +1,167 @@
+#version: '3'
+
+services:
+  db-1:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'city-db'
+      MYSQL_ROOT_PASSWORD: 'tutorial0'
+    ports:
+      - "3307:3306"
+    volumes:
+      - my-mysql-data:/var/lib/mysql
+    networks:
+      - demo_net
+
+  db-2:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'device-db'
+      MYSQL_ROOT_PASSWORD: 'tutorial0'
+    ports:
+      - "3308:3306"
+    volumes:
+      - my-db:/var/lib/mysql
+    networks:
+      - demo_net
+
+  reverse-proxy:
+    image: traefik:latest
+    command:
+      - --api.insecure=true
+      - --providers.docker
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --log.level=DEBUG
+      - --entrypoints.web.address=:80
+
+    ports:
+      - "80:80"
+      - "8080:8080"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik_logs:/var/log/traefik
+
+    networks:
+      - demo_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=http://localhost:3000"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolexposeheaders=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
+
+  devices:
+    build:
+      context: ./devices
+      dockerfile: Dockerfile
+    depends_on:
+      - db-2
+    deploy:
+      replicas: 4
+#    ports:
+#      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db-2:3306/device-db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: tutorial0
+#      - DB_IP=db
+#      - DB_PORT=3306
+#      - DB_DBNAME=device-db
+#      - DB_USER=root
+#      - DB_PASSWORD=tutorial0
+
+    networks:
+      - demo_net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.devices.rule=Host(`devices.localhost`) || PathPrefix(`/devices`)"
+      - "traefik.http.middlewares.devices-strip.stripprefix.prefixes=/devices"
+      - "traefik.http.routers.devices.middlewares=devices-strip "
+      - "traefik.http.services.devices.loadbalancer.server.port=8081"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolalloworigin=*"
+      - "traefik.http.routers.devices.middlewares=cors"
+
+  spring-demo:
+    build:
+      context: ./spring-demo
+      dockerfile: Dockerfile
+    depends_on:
+      - db-1
+    deploy:
+      replicas: 4
+#    ports:
+#      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db-1:3306/city-db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: tutorial0
+#      - DB_IP=db
+#      - DB_PORT=3306
+#      - DB_DBNAME=city-db
+#      - DB_USER=root
+#      - DB_PASSWORD=tutorial0
+
+    networks:
+      - demo_net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spring-demo.rule=Host(`spring-demo.localhost`) || PathPrefix(`/spring-demo`)"
+      - "traefik.http.middlewares.spring-demo-strip.stripprefix.prefixes=/spring-demo"
+      - "traefik.http.routers.spring-demo.middlewares=spring-demo-strip "
+      - "traefik.http.services.spring-demo.loadbalancer.server.port=8080"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolalloworigin=*"
+      - "traefik.http.routers.spring-demo.middlewares=cors"
+
+  chat:
+    build:
+      context: ./chat
+      dockerfile: Dockerfile
+    networks:
+      - demo_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.chat.rule=Host(`chat.localhost`)"
+      - "traefik.http.routers.chat.middlewares=chat-strip "
+      - "traefik.http.services.chat.loadbalancer.server.port=8084"
+      - "traefik.http.services.chat.loadbalancer.server.scheme=http"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolalloworigin=*"
+      - "traefik.http.routers.chat.middlewares=cors"
+      
+
+  frontend:
+    build:
+      context: ./react-demo
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    networks:
+      - demo_net
+    depends_on:
+      - devices
+      - spring-demo
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`frontend.localhost`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.frontend.middlewares=cors"
+
+
+volumes:
+  my-mysql-data:
+  my-db:
+  traefik_logs:
+
+networks:
+  demo_net:
+    external: true
+
+
