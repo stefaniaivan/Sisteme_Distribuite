@@ -27,6 +27,20 @@ services:
     networks:
       - demo_net
 
+  db-3:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'monitoring-db'
+      MYSQL_ROOT_PASSWORD: 'tutorial0'
+    ports:
+      - "3309:3306"
+    volumes:
+      - my-db-3:/var/lib/mysql
+    networks:
+      - demo_net
+  
+
   reverse-proxy:
     image: traefik:latest
     command:
@@ -121,6 +135,41 @@ services:
       # - "traefik.http.middlewares.cors.headers.accesscontrolalloworigin=*"
       - "traefik.http.routers.spring-demo.middlewares=cors"
 
+  monitoring:
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile
+    depends_on:
+      - db-3
+#    ports:
+#      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db-3:3306/monitoring-db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: tutorial0
+      SPRING_RABBITMQ_HOST: amqps://yupanwyv:PaQnsr3et0Hiqt4iT5DVJwXrCh9IdKWo@rat.rmq2.cloudamqp.com/yupanwyv
+      SPRING_RABBITMQ_USERNAME: yupanwyv
+      SPRING_RABBITMQ_PASSWORD: PaQnsr3et0Hiqt4iT5DVJwXrCh9IdKWo
+      SPRING_RABBITMQ_VHOST: yupanwyv
+#      - DB_IP=db
+#      - DB_PORT=3306
+#      - DB_DBNAME=city-db
+#      - DB_USER=root
+#      - DB_PASSWORD=tutorial0
+
+    networks:
+      - demo_net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring.rule=Host(`monitoring.localhost`) || PathPrefix(`/monitoring`)"
+      - "traefik.http.middlewares.monitoring-strip.stripprefix.prefixes=/monitoring"
+      - "traefik.http.routers.monitoring.middlewares=monitoring-strip "
+      - "traefik.http.services.monitoring.loadbalancer.server.port=8083"
+      - "traefik.http.services.monitoring.loadbalancer.server.scheme=http"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolalloworigin=*"
+      - "traefik.http.routers.monitoring.middlewares=cors"
+
   chat:
     build:
       context: ./chat
@@ -148,6 +197,7 @@ services:
     depends_on:
       - devices
       - spring-demo
+      - monitoring
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`frontend.localhost`)"
@@ -158,6 +208,7 @@ services:
 volumes:
   my-mysql-data:
   my-db:
+  my-db-3:
   traefik_logs:
 
 networks:

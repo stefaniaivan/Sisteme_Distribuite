@@ -11,12 +11,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.*;
 
 @Component
 public class RabbitMQConsumer {
 
     private Map<String, List<Double>> deviceMeasurements = new HashMap<>();
+    private Map<String, Long> lastUpdateTime = new HashMap<>();
 
     @Autowired
     private MonitoringRepository monitoringRepository;
@@ -46,6 +49,8 @@ public class RabbitMQConsumer {
                 Monitoring monitoring = new Monitoring();
                 monitoring.setDeviceId(deviceId);
                 monitoring.setConsumption(hourlyConsumption);
+                monitoring.setDate(LocalDate.now());
+                monitoring.setHour(LocalTime.now().getHour());
                 monitoringRepository.save(monitoring);
                 if(hourlyConsumption > deviceManagement.getMaxEnergy(deviceId)){
                     String notificationMessage = "Device " + deviceId + " exceeded the limit with consumption: " + hourlyConsumption;

@@ -23,7 +23,7 @@ public class RabbitMQConfig {
 
     @Bean
     public Binding binding(Queue meterReadingQueue, TopicExchange exchange){
-        return BindingBuilder.bind(meterReadingQueue).to(exchange).with("routing.key");
+        return BindingBuilder.bind(meterReadingQueue).to(exchange).with("device.#");
     }
 
     @Bean
