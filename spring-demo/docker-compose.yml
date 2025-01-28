@@ -1,0 +1,77 @@
+#version: '3'
+
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'city-db'
+      MYSQL_ROOT_PASSWORD: 'tutorial0'
+    ports:
+      - "3307:3306"
+    volumes:
+      - my-mysql-data:/var/lib/mysql
+    networks:
+      - demo_net
+
+  reverse-proxy:
+    image: traefik:latest
+    command:
+      - --api.insecure=true
+      - --providers.docker
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --log.level=DEBUG
+      - --entrypoints.web.address=:80
+
+    ports:
+      - "80:80"
+      - "8080:8080"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik_logs:/var/log/traefik
+
+    networks:
+      - demo_net
+
+  spring-demo:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    depends_on:
+      - db
+    deploy:
+      replicas: 4
+#    ports:
+#      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/city-db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: tutorial0
+#      - DB_IP=db
+#      - DB_PORT=3306
+#      - DB_DBNAME=city-db
+#      - DB_USER=root
+#      - DB_PASSWORD=tutorial0
+
+    networks:
+      - demo_net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spring-demo.rule=Host(`spring-demo.localhost`) || PathPrefix(`/spring-demo`)"
+      - "traefik.http.middlewares.spring-demo-strip.stripprefix.prefixes=/spring-demo"
+      - "traefik.http.routers.spring-demo.middlewares=spring-demo-strip "
+      - "traefik.http.services.spring-demo.loadbalancer.server.port=8080"
+
+
+volumes:
+  my-mysql-data:
+  traefik_logs:
+
+networks:
+  demo_net:
+    external: true
+
+
