@@ -1,0 +1,62 @@
+# version: '3'
+
+# services:
+
+#   react:
+#     image: fe-image
+#     build:
+#       context: ./
+#       dockerfile: ./Dockerfile
+#     ports:
+#        - "3004:3000"
+#     environment:
+#       - BACKEND=http://spring-demo.localhost
+#       - BACKEND_DEVICES=http://devices.localhost
+#     labels:
+#       - "traefik.enable=true"
+#       - "traefik.http.routers.react.rule=Host(`frontend.localhost`)"
+#       - "traefik.http.services.react.loadbalancer.server.port=3000"
+#     networks:
+#       demo_net:
+
+# networks:
+#   demo_net:
+#     external: true
+
+services:
+  react:
+    # image: fe-image
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    # environment:
+    #   - BACKEND=http://spring-demo.localhost
+    #   - BACKEND_DEVICES=http://devices.localhost
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.react.rule=Host(`react.localhost`)"
+      - "traefik.http.services.react.loadbalancer.server.port=80"
+    networks:
+      - demo_net
+
+  reverse-proxy:
+    image: traefik:latest
+    command:
+      - --api.insecure=true
+      - --providers.docker
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --log.level=DEBUG
+      - --entrypoints.web.address=:30
+    ports:
+      - "30:30"
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - demo_net
+
+networks:
+  demo_net:
+    external: true
+
